@@ -1,34 +1,48 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Dropzone from './components/Dropzone.jsx'
 import Instructions from './components/Instructions.jsx'
 import Result from './components/Result.jsx'
-import { parseInstructions, describeOp } from './lib/parseInstructions.js'
-import { applyOps } from './lib/applyOps.js'
 
 export default function App() {
   const [file, setFile] = useState(null)
   const [text, setText] = useState('')
-  const [ops, setOps] = useState([])
+  const [plan, setPlan] = useState({ ops: [], descriptions: [] })
   const [status, setStatus] = useState('idle') // idle | working | done | error
   const [resultUrl, setResultUrl] = useState(null)
+  const [log, setLog] = useState([])
   const [error, setError] = useState('')
 
-  const onText = (t) => {
-    setText(t)
-    setOps(t.trim() ? parseInstructions(t) : [])
-  }
+  // מבקשים מהשרת לפרש את ההוראות (עם השהיה קצרה בזמן הקלדה)
+  useEffect(() => {
+    if (!text.trim()) { setPlan({ ops: [], descriptions: [] }); return }
+    const t = setTimeout(async () => {
+      const fd = new FormData(); fd.append('text', text)
+      try {
+        const r = await fetch('/api/plan', { method: 'POST', body: fd })
+        setPlan(await r.json())
+      } catch { /* השרת לא זמין — נשאיר את התוכנית ריקה */ }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [text])
+
+  const validOps = plan.ops.filter((o) => o.type !== 'unknown')
 
   const run = async () => {
-    const valid = ops.filter((o) => o.type !== 'unknown')
-    if (!file || !valid.length) return
-    setStatus('working')
-    setError('')
+    if (!file || !validOps.length) return
+    setStatus('working'); setError(''); setLog([])
     try {
-      const bytes = await file.arrayBuffer()
-      const out = await applyOps(bytes, valid)
-      const blob = new Blob([out], { type: 'application/pdf' })
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('ops', JSON.stringify(validOps))
+      const r = await fetch('/api/process', { method: 'POST', body: fd })
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}))
+        throw new Error(j.error || 'השרת החזיר שגיאה')
+      }
+      const blob = await r.blob()
       if (resultUrl) URL.revokeObjectURL(resultUrl)
       setResultUrl(URL.createObjectURL(blob))
+      try { setLog(JSON.parse(decodeURIComponent(escape(atob(r.headers.get('X-Log') || 'W10='))))) } catch { setLog([]) }
       setStatus('done')
     } catch (e) {
       setError(e.message || 'משהו השתבש בעיבוד הקובץ')
@@ -37,7 +51,8 @@ export default function App() {
   }
 
   const reset = () => {
-    setFile(null); setText(''); setOps([]); setStatus('idle'); setResultUrl(null); setError('')
+    setFile(null); setText(''); setPlan({ ops: [], descriptions: [] })
+    setStatus('idle'); setResultUrl(null); setLog([]); setError('')
   }
 
   return (
@@ -54,20 +69,16 @@ export default function App() {
 
       <section className="step">
         <h2>2. מה לעשות</h2>
-        <Instructions value={text} onChange={onText} disabled={!file} />
-        {ops.length > 0 && (
+        <Instructions value={text} onChange={setText} disabled={!file} />
+        {plan.descriptions.length > 0 && (
           <ul className="plan">
-            {ops.map((op, i) => (
-              <li key={i} className={op.type === 'unknown' ? 'bad' : ''}>{describeOp(op)}</li>
+            {plan.descriptions.map((d, i) => (
+              <li key={i} className={plan.ops[i].type === 'unknown' ? 'bad' : ''}>{d}</li>
             ))}
           </ul>
         )}
-        <button
-          className="primary"
-          onClick={run}
-          disabled={!file || !ops.some((o) => o.type !== 'unknown') || status === 'working'}
-        >
-          {status === 'working' ? 'מעבד…' : 'בצע עריכה'}
+        <button className="primary" onClick={run} disabled={!file || !validOps.length || status === 'working'}>
+          {status === 'working' ? 'מעבד… (סריקות לוקחות כמה שניות)' : 'בצע עריכה'}
         </button>
         {error && <p className="error">{error}</p>}
       </section>
@@ -75,6 +86,7 @@ export default function App() {
       {status === 'done' && (
         <section className="step">
           <h2>3. התוצאה</h2>
+          {log.length > 0 && <ul className="log">{log.map((l, i) => <li key={i}>{l}</li>)}</ul>}
           <Result url={resultUrl} name={file.name} onReset={reset} />
         </section>
       )}

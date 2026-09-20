@@ -1,11 +1,11 @@
-const EXAMPLES = ['סובב את הכל 90', 'מחק עמודים 2-4', 'השאר רק עמודים 1-3', 'הפוך את סדר העמודים']
+const EXAMPLES = ['הסר ווטרמארק', 'מחק JET MIDWEST', 'מחק עמודים 2-4', 'סובב את הכל 90', 'השאר רק עמודים 1-3']
 
 export default function Instructions({ value, onChange, disabled }) {
   return (
     <div className="instr">
       <textarea
         rows={3}
-        placeholder="לדוגמה: מחק עמוד 1, ואז סובב את הכל 90"
+        placeholder="לדוגמה: הסר ווטרמארק, ואז מחק את שם הלקוח JET MIDWEST"
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}

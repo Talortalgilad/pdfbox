@@ -44,3 +44,6 @@ textarea:disabled { background: var(--paper); }
 .actions button { font: inherit; font-size: 15px; margin-top: 20px; background: none; border: none; color: var(--muted); cursor: pointer; text-decoration: underline; }
 
 @media (max-width: 520px) { .hero h1 { font-size: 32px; } .step { padding: 18px; } }
+
+.log { list-style: none; padding: 0; margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+.log li::before { content: '• '; }
