@@ -201,7 +201,12 @@ def parse(text: str):
     parts = [p.strip() for p in re.split(r"[\n;]| ואז | וגם ", text) if p.strip()]
     for p in parts:
         low = p.lower()
-        if re.search(r"ווטרמארק|ווטר מארק|סימן מים|watermark", low):
+        if re.search(r"הצלב|הצלבה|מבוקש|wanted|match|cross", low):
+            ops.append({"type": "match"})
+        elif re.search(r"חלץ|חילוץ|לחלץ|extract|אקסל|excel|טבלה|מניפסט|manifest", low):
+            m = re.search(r"(?:עמודות|columns)\s*[:]?\s*(.+)$", p, re.I)
+            ops.append({"type": "extract", "hint": m.group(1).strip() if m else None})
+        elif re.search(r"ווטרמארק|ווטר מארק|סימן מים|watermark", low):
             m = re.search(r"(?:כתוב|שכתוב|בו|text)\s*[:\"']?\s*(.+)$", p)
             force = bool(re.search(r"אגרסיבי|חזק|בכוח|force|hard", low))
             ops.append({"type": "watermark", "hint": m.group(1).strip(" \"'") if m else None, "force": force})
@@ -231,6 +236,10 @@ def parse(text: str):
 
 def describe(op):
     t = op["type"]
+    if t == "match":
+        return "חילוץ טבלה והצלבה מול רשימת המבוקשים של הוק"
+    if t == "extract":
+        return "חילוץ טבלה לאקסל" + (f' (עמודות: {op["hint"]})' if op.get("hint") else "")
     if t == "watermark":
         return "הסרת ווטרמארק" + (" (אגרסיבי)" if op.get("force") else "") + (f' ("{op["hint"]}")' if op.get("hint") else "")
     if t == "redact":
@@ -248,10 +257,29 @@ def describe(op):
 
 
 def apply(pdf_bytes: bytes, ops):
+    """מחזיר (bytes, log, kind) — kind הוא 'pdf' או 'xlsx'."""
+    from . import extract as _extract
     doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
     log = []
     for op in ops:
         t = op["type"]
+        if t == "match":
+            from . import wanted as _wanted
+            out, msg = _extract.extract_tables(doc, None)
+            doc.close()
+            if out is None:
+                raise ValueError(msg)
+            out, msg2 = _wanted.match_workbook(out, "uploaded PDF")
+            log += [msg, msg2]
+            return out, log, "xlsx"
+        if t == "extract":
+            # חילוץ מסיים את השרשרת — הפלט הוא אקסל (אחרי כל פעולות העמודים שקדמו לו)
+            out, msg = _extract.extract_tables(doc, op.get("hint"))
+            log.append(msg)
+            doc.close()
+            if out is None:
+                raise ValueError(msg)
+            return out, log, "xlsx"
         if t == "watermark":
             n = remove_watermark(doc, op.get("hint"), op.get("force", False))
             log.append(f"ווטרמארק: טופלו {n} עמודים/אלמנטים")
@@ -268,4 +296,4 @@ def apply(pdf_bytes: bytes, ops):
             reverse(doc); log.append(describe(op))
     out = doc.tobytes(garbage=3, deflate=True)
     doc.close()
-    return out, log
+    return out, log, "pdf"

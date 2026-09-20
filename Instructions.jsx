@@ -1,4 +1,4 @@
-const EXAMPLES = ['הסר ווטרמארק', 'הסר ווטרמארק אגרסיבי', 'מחק JET MIDWEST', 'מחק עמודים 2-4', 'סובב את הכל 90']
+const EXAMPLES = ['הצלב מול רשימת המבוקשים', 'חלץ טבלה לאקסל', 'הסר ווטרמארק', 'מחק JET MIDWEST', 'מחק עמודים 2-4']
 
 export default function Instructions({ value, onChange, disabled }) {
   return (
