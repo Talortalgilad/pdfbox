@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import Dropzone from './components/Dropzone.jsx'
 import Instructions from './components/Instructions.jsx'
 import Result from './components/Result.jsx'
+import WantedList from './components/WantedList.jsx'
 
 export default function App() {
   const [file, setFile] = useState(null)
@@ -9,6 +10,7 @@ export default function App() {
   const [plan, setPlan] = useState({ ops: [], descriptions: [] })
   const [status, setStatus] = useState('idle') // idle | working | done | error
   const [resultUrl, setResultUrl] = useState(null)
+  const [resultKind, setResultKind] = useState('pdf')
   const [log, setLog] = useState([])
   const [error, setError] = useState('')
 
@@ -42,6 +44,7 @@ export default function App() {
       const blob = await r.blob()
       if (resultUrl) URL.revokeObjectURL(resultUrl)
       setResultUrl(URL.createObjectURL(blob))
+      setResultKind(r.headers.get('X-Kind') || 'pdf')
       try { setLog(JSON.parse(decodeURIComponent(escape(atob(r.headers.get('X-Log') || 'W10='))))) } catch { setLog([]) }
       setStatus('done')
     } catch (e) {
@@ -70,6 +73,7 @@ export default function App() {
       <section className="step">
         <h2>2. מה לעשות</h2>
         <Instructions value={text} onChange={setText} disabled={!file} />
+        <WantedList />
         {plan.descriptions.length > 0 && (
           <ul className="plan">
             {plan.descriptions.map((d, i) => (
@@ -87,7 +91,7 @@ export default function App() {
         <section className="step">
           <h2>3. התוצאה</h2>
           {log.length > 0 && <ul className="log">{log.map((l, i) => <li key={i}>{l}</li>)}</ul>}
-          <Result url={resultUrl} name={file.name} onReset={reset} />
+          <Result url={resultUrl} name={file.name} kind={resultKind} onReset={reset} />
         </section>
       )}
     </main>

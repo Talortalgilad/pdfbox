@@ -4,7 +4,7 @@ import os
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from . import pdf_ops
+from . import pdf_ops, wanted
 
 app = FastAPI()
 
@@ -21,10 +21,28 @@ async def process(file: UploadFile = File(...), ops: str = Form(...)):
     try:
         parsed = json.loads(ops)
         parsed = [o for o in parsed if o.get("type") != "unknown"]
-        out, log = pdf_ops.apply(data, parsed)
+        out, log, kind = pdf_ops.apply(data, parsed)
     except Exception as e:  # noqa
         return JSONResponse({"error": str(e)}, status_code=400)
-    return Response(out, media_type="application/pdf", headers={"X-Log": base64.b64encode(json.dumps(log, ensure_ascii=False).encode()).decode()})
+    media = "application/pdf" if kind == "pdf" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    return Response(out, media_type=media, headers={
+        "X-Log": base64.b64encode(json.dumps(log, ensure_ascii=False).encode()).decode(),
+        "X-Kind": kind,
+    })
+
+
+@app.get("/api/wanted")
+async def wanted_info():
+    return {"count": len(wanted.load_wanted())}
+
+
+@app.post("/api/wanted")
+async def wanted_upload(file: UploadFile = File(...)):
+    try:
+        n = wanted.save_wanted(await file.read())
+    except Exception as e:  # noqa
+        return JSONResponse({"error": f"קובץ לא תקין: {e}"}, status_code=400)
+    return {"count": n}
 
 
 dist = os.path.join(os.path.dirname(__file__), "..", "dist")
